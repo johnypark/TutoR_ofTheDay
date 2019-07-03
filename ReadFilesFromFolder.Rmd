@@ -1,0 +1,92 @@
+---
+title: "R basics: Reading from multiple file names"
+author: "tutoR_ofTheDay"
+date: "July 3, 2019"
+output: rmarkdown::github_document 
+theme: readable
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+### Examples using rainfall data from Barro Colorado Island 
+
+We will explore dealing with loading and using datasets in mulitple occasions. In today's tutorial, we will explore how to read files by files and to make it easier to access each file's information with labels. 
+
+First, the data we will be using is a time series of daily rainfall data
+collected at the clearing (‘El Claro’), the original meteorological station maintained by STRI. 
+See <https://biogeodb.stri.si.edu/physical_monitoring/research/barrocolorado> 
+
+
+
+List of the functions we will be using today are R basic functions (which means we don't need to load any packages):
+
+`base::getwd`
+`base::paste0`
+`base::list.files`
+`base::list`
+`utils::read.csv`
+`base::names`
+
+
+
+
+
+
+We start off with setting working directory and path for reading files.
+
+```{r}
+
+DIR_wd=getwd() #get working directory
+DIR_path=paste0(DIR_wd,"/data/yearly_rainfall_BCI/") #set path of data location
+```
+
+```{r}
+ls_filenames<-list.files(path=DIR_path,pattern='.csv$')
+```
+
+
+
+
+  Function base::list.files() returns vectors of names of files and / or directoties in the designated path. Note that I used an argument `pattern=".csv$"` in this case, to only retrieve file names ending with ".csv".
+
+Please note that character`$` is "regular expression". What are regular expressions? In my terms, they are set of grammers to define search patterns. For example, character `$` is one of the regular expression syntax incidating the end of the string. R doesn't have very strick standard in using search patterns, since we would need an extra character `\` (escape) to declare that we are using the following character`.` as a literal. (therefore `pattern=".csv$"` is correct term here.) For more details in regular expressions, please refer to other sources such as [link].
+
+Now, let us see what `ls_filenames` object contains:
+```{r}
+print(ls_filenames)
+```
+
+Perfect! we see all the filenames are listed in `ls_filenames` object. 
+
+
+Next, we read files using for loop control, and assign each objects to `list` elements. `list` is particularly easy and useful for this purpose, but there could be mulitple other ways to do this operation. I chose `list` because it is more flexible with assigning different datasets to a single object.  
+
+```{r}
+df.current<-list()
+for (i in 1:length(ls_filenames)){
+df.current[[i]]<-read.csv(paste0(DIR_path,ls_filenames[i]))
+}
+```
+
+Now, we check if we have the dataset we want.
+```{r}
+ls_filenames[1]
+head(df.current[[1]])
+```
+
+Great! first element of list contains data from 1971.
+
+Finally, we want to assign element name that make sense to each data.
+
+```{r}
+names(df.current)=ls_filenames # assign name for each list element: corresponding file names
+```
+
+Now we could call data from focal year with the file names, directly.
+```{r}
+head(df.current$BCI_2000.csv)
+```
+
+`#readfiles` `#R` `#multiplefiles` `#regex` `#list` `#BCI` `#rainfall`
