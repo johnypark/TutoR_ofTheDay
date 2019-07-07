@@ -4,19 +4,16 @@
 #!/bin/bash
 #reading files line by line for input file ## 20190707 John Park
 #input="/path/to/txt/file"
-img_path='/Users/JYP/Dropbox/0_feature_analysis_UAV/Data/0_GroundTruth_Database/IMG_ORIG/'
-out_path='/Users/JYP/Dropbox/0_feature_analysis_UAV/Data/0_GroundTruth_Database/IMG_ORIG_ObsTrees/'
+img_path=
+out_path=
 
-linecount=0
+
 while IFS= read -r line
 do
   #echo "$line"
        tagstr="tag_${line}_" #use curly bracelet to unclude variable inside the string
             ls $img_path | grep $tagstr >> obstreepath.txt ## find a way to automate cp without saving file; xargs?
-       #    $((linecount++)) 
-       #    echo "$linecount- $line currnet size " 
-       #    currwc=$(wc -l obstreepath.txt)
-       #    echo "$currwc"
+    
            
 done < "$1"
 
