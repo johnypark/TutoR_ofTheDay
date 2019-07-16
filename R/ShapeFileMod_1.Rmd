@@ -1,0 +1,57 @@
+---
+title: "ShapeFileModification_1"
+author: "TutoR for the day"
+date: "July 16, 2019"
+output: github_document
+---
+Load packages spbabel, sp, sf.
+```{r setup, include=FALSE}
+
+library(spbabel)
+library(sp)
+library(sf)
+library("rnaturalearth")
+library("rnaturalearthdata")
+library(ggplot2)
+```
+
+## Shape File Modificaiton
+Get BCI 50ha plot shapefile from: https://stridata-si.opendata.arcgis.com/datasets/8adf6255d67041fda71a4add8959072a_3
+And load shapefile data using sf package.
+```{r}
+path.dir<-getwd()
+shp_bci50<-st_read(paste0(path.dir,"/data/BCI_50ha/BCI_50ha.shp"))
+plot(st_geometry(shp_bci50))
+```
+Let's see what our site region looks like. 
+First, we get world map from package rnaturalearth.
+
+```{r}
+library(rnaturalearth)
+world <- ne_countries(scale='medium',returnclass = 'sf')
+class(world)
+plot(st_geometry(world))
+```
+
+Now we want to overlay these two maps. First check projection, using function st_crs(). 
+```{r pressure, echo=FALSE}
+st_crs(shp_bci50)
+st_crs(world)
+```
+The world shapefile uses EPGS 4326 WGS84, longlat coordinate, and BCI shapefile uses EPGS 32617 WGS 84 utm coordinate. We will ask sf to match these two different coordinate reference systems (crs hereafter).
+
+We can simply replace the crs of world shp with crs of BCI shp, using function st_transform().
+```{r}
+world_p <- st_transform(world, crs =st_crs(shp_bci50))
+shp_panama=world_p[world_p$name=="Panama",] ## get only panama map
+plot(st_geometry(shp_panama))
+```
+
+
+```{r}
+xlim.coord<-st_bbox(shp_bci50)[c(1,3)]-c(10000,-10000)
+ylim.coord<-st_bbox(shp_bci50)[c(2,4)]-c(20000,-20000)
+plot(st_geometry(shp_panama),axes=TRUE,xlim=xlim.coord,
+     ylim=ylim.coord)
+plot(st_geometry(shp_bci50),add=TRUE,color="red")
+```
