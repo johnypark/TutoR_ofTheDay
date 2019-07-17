@@ -1,8 +1,9 @@
 ## John Park Jul 15 2019 organizing the code. 
 library(sf)
+library(sp)
 library(rgdal)
-
 library(spbabel)
+library(dplyr)
 ################ functions #########################
 GetMatrixFromSf<-function(sfextent){
   if(class(sfextent)[1]!="sf"){
@@ -45,7 +46,7 @@ TransCoordinates<-function(InputSptable,TransMatrixA,orig_latlong){
     cbind(input_crds%>%select(object_,branch_,island_,order_))
   return(res_trans)
 }
-
+### Make grid and transform
 MakeGridTrans<-function(SfObjectRect,SfOrigRect,CellSize){
   shp.obj1<-SfObjectRect
   
@@ -91,30 +92,14 @@ Bci50haExtent_orig<-df_bci50ha_orig%>%as.matrix%>%list%>% #is sf object now
 
 BCI50ha_grid<-MakeGridTrans(SfObjectRect = sf_bci50ha,
                               SfOrigRect = Bci50haExtent_orig,
-                              CellSize = 40)
+                              CellSize = 20)
 plot(BCI50ha_grid)
 
-test<-sf_bci50ha%>%st_make_grid(cellsize=c(20,50))%>%as(.,"Spatial")
 writeOGR(BCI50ha_grid%>%as(.,"Spatial"), dsn = '.', layer = '50ha_20by20m_grid', driver = "ESRI Shapefile")
 #output: 50ha_20by20m_grid.shp
 
 ## Must check: all the crown location points belong to a subsetted
 ## polygon
-par(mfrow=c(2,2)) 
-plot(Bci50ha_orig_grid)
-sp_BCI50ha_grid%>%st_as_sf()%>%plot()
-cowplot::plot_grid(p1,p2)
-df%>%filter(.data[["L1"]]==one) #rlang 0.4.0 should work
+#df%>%filter(.data[["L1"]]==one) #rlang 0.4.0 should work
  
-
-### merge dataset
-
-df.bci.soil<-read.csv("/Users/JYP/Documents/Phenology2_Diversity/DATA/bci.block20.data-1.csv")
-colnames(df.bci.soil)[1]<-"x"
-df.bci.soil<-df.bci.soil%>%arrange(y)
-df.bci.soil$rownumber_<-c(1:1250)
-
-df.bci.soil%>%ggplot(aes(x,y,color=rownumber_))+geom_point()+theme_classic()
-
-bci.50ha.SoilMap<-sp.bci.50ha.extent.split%>%st_as_sf()%>%left_join(df.bci.soil,by="rownumber_")
 
