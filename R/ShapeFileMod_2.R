@@ -1,73 +1,111 @@
+## John Park Jul 15 2019 organizing the code. 
+library(sf)
 library(rgdal)
-path.dir<-getwd()
-shp.obj1<-st_read(paste0(path.dir,"/data/BCI_50ha/BCI_50ha.shp"))
-bci.50ha.extent<-as(shp.obj1,"Spatial")
-## make a new sp object with straight polygon (after the rotation) 
 
 library(spbabel)
-
-df.to.sp<-function(df_object,sp_object){
-  ##need to fix: if multiple objects, id and group shoud be contained
-  p = Polygon(df_object[c("long","lat")])
-  ps = Polygons(list(p),1)
-  sps = SpatialPolygons(list(ps))
-  proj4string(sps) = proj4string(sp_object)
-  return(sps)}
-
-
+################ functions #########################
+GetMatrixFromSf<-function(sfextent){
+  if(class(sfextent)[1]!="sf"){
+  stop("input must be of class sf")}
 ### handle get origin long lat and get rotation matrix rot.A
-shp.obj1.coord<-shp.obj1%>%st_coordinates%>%data.frame() ## extract coordinates of the polygon 
-origin.latlong<-shp.obj1.coord[4,1:2]%>%as.matrix() ## get coordinates of origin
+  sfextent.coord<-sfextent%>%st_coordinates%>%data.frame() ## extract coordinates of the polygon 
+  origin<-sfextent.coord[sfextent.coord$X==min(sfextent.coord$X),][1:2]%>%
+    as.matrix
+## get coordinates of origin
+  dft<-sfextent.coord
+  dft$X<-dft$X-origin[1] # get long(x) values after setting origin
+  dft$Y<-dft$Y-origin[2] # get lat(y) values after setting origin 
+  c1<-dft[c("X","Y")][1,] ## extract point for (x,0) after transpose  
+  c3<-dft[c("X","Y")][3,] ## extract point for (0,y) after transpose
+  mA<-matrix(c(c1%>%as.numeric,c3%>%as.numeric),2,2)
+  
+  ans1<-solve(mA)%*%(dft[c("X","Y")]%>%as.matrix()%>%t)%>%t ## check if this works
+  
+return(list(matrix=mA,
+            origin.latlong=origin,
+            check=ans1
+            ))
+}
 
-df.test<-shp.obj1.coord
-df.test$X<-df.test$X-origin.latlong[1] # get long(x) values after setting origin
-df.test$Y<-df.test$Y-origin.latlong[2] # get lat(y) values after setting origin 
-c1<-df.test[c("X","Y")][1,] ## extract point for (x,0) after transpose  
-c3<-df.test[c("X","Y")][3,] ## extract point for (0,y) after transpose
+GetTransMatrix<-function(matrix_C_orig, matrix_C_trans){
+  rot.A<-matrix_C_trans%*%solve(matrix_C_orig)
+return(rot.A) ## get transpose matrix A from A*C=C', A=C'*inv(C)
+}
+## transferring coordinates with transition matrix A, origin latong
+TransCoordinates<-function(InputSptable,TransMatrixA,orig_latlong){
+  input_crds<-InputSptable
+  trns_A<-TransMatrixA
+  Olatlong<-orig_latlong
+  res_trans<-data.frame((input_crds[c("y_","x_")]%>%
+                           as.matrix)%*%trns_A)
+  colnames(res_trans)=c("y_","x_")
+  res_trans$y_=res_trans$y_+Olatlong[2]
+  res_trans$x_=res_trans$x_+Olatlong[1]
+  res_trans<-res_trans%>%
+    cbind(input_crds%>%select(object_,branch_,island_,order_))
+  return(res_trans)
+}
+
+MakeGridTrans<-function(SfObjectRect,SfOrigRect,CellSize){
+  shp.obj1<-SfObjectRect
+  
+  bci.50ha.extent<-as(shp.obj1,"Spatial") ## sp object for the same data
+  res<-GetMatrixFromSf(shp.obj1)
+  C_after<-res$matrix
+  C_zero<-matrix(c(0,500,1000,0),2,2)
+  rot.A<-GetTransMatrix(C_zero,C_after) # get rotation matrix A
+  origin.latlong<-res$origin.latlong # get lat long origin
+  
+  # split into 1250 cells using sf::st_make_grid() function
+  Bci50ha_orig_grid<-Bci50haExtent_orig%>%
+    st_make_grid(cellsize = c(CellSize, CellSize))%>%
+    st_sf(grid_id = 1:length(.))
+  
+  ## sf-> spbabel::sptable to get all coordinates with detiled object info  
+  ## sptable make things much easier. 
+  
+  GridCrds_20m_orig<-sptable(Bci50ha_orig_grid) ##spbabel::sptable 
+  #"The long-form single table of all coordinates, with object, branch, island-status, and order provides a reasonable middle-ground for transferring between different representations of Spatial data. "
+  
+  GridCrds_20m_trans<-TransCoordinates(GridCrds_20m_orig,
+                                       TransMatrixA = rot.A, #rotate orig points with rot. A
+                                       orig_latlong = origin.latlong) #put back original lat long 
+  
+  sp_BCI50ha_grid<-sp(GridCrds_20m_trans,
+                      crs=proj4string(bci.50ha.extent)) # function spbabel::sf does not work currently, 
+  
+  return(st_as_sf(sp_BCI50ha_grid))
+}#so convert sp first and change sp to sf. 
 
 
-C_zero<-matrix(c(0,500,1000,0),2,2)
-C_after<-matrix(c(c1%>%as.numeric,c3%>%as.numeric),2,2)
-rot.A<-C_after%*%solve(C_zero) ## get transpose matrix A from A*C=C', A=C'*inv(C)
+################## __MAIN__ ################################
 
-ans1<-solve(rot.A)%*%(df.test[c("X","Y")]%>%as.matrix()%>%t)%>%t ## check if this works
+path.dir<-getwd()
+sf_bci50ha<-st_read(paste0(path.dir,"/data/BCI_50ha/BCI_50ha.shp")) ##sf object 
 
-## QQ. Is there way to make sf directly?
-df.bci.50ha.zero<-data.frame(long=c(0,1000,1000,0,0),
-                             lat=c(500,500,0,0,500)) 
-# get sp object
-bci.50ha.extent.zero<-df.to.sp(df_object = df.bci.50ha.zero,sp_object = bci.50ha.extent)
-# split into 1250 cells using sf
-bci.50ha.z.split<-st_as_sf(bci.50ha.extent.zero)%>%st_make_grid(cellsize = c(20, 20))%>%
-  st_sf(grid_id = 1:length(.)) ## directly getting data from sf, don't know how to carry over 
-#grid_id with the strcuture, therefore going -> sp object-> sptable -> rotate -> back to sp object
-# make sp object of the split
-sp.bci.50ha.z.split<-bci.50ha.z.split%>%as(.,"Spatial")
-sf
-#=================== Way 2 : Which way is better? use of spbabel
-pts.20m.grid.0<-sptable(sp.bci.50ha.z.split)
-pts.20m.grid.tr<-data.frame((pts.20m.grid.0[c("y_","x_")]%>%as.matrix)%*%rot.A)
-colnames(pts.20m.grid.tr)=c("y_","x_")
-pts.20m.grid.tr$y_=pts.20m.grid.tr$y_+origin.latlong[2]
-pts.20m.grid.tr$x_=pts.20m.grid.tr$x_+origin.latlong[1]
-pts.20m.grid.tr<-pts.20m.grid.tr%>%
-  cbind(pts.20m.grid.0%>%select(object_,branch_,island_,order_))
+df_bci50ha_orig<-data.frame(long=c(0,1000,1000,0,0),
+                            lat=c(500,500,0,0,500)) 
+# make sf object with coordinates with sf::st_polygon, sf:st_sfc. 
+Bci50haExtent_orig<-df_bci50ha_orig%>%as.matrix%>%list%>% #is sf object now
+  st_polygon()%>%st_sfc(.,crs=st_crs(sf_bci50ha))%>%st_sf()
 
-sp.bci.50ha.grid<-sp(pts.20m.grid.tr) ## sp is critical function here!!!! reversing fortify
-proj4string(sp.bci.50ha.grid)<-proj4string(bci.50ha.extent)
+BCI50ha_grid<-MakeGridTrans(SfObjectRect = sf_bci50ha,
+                              SfOrigRect = Bci50haExtent_orig,
+                              CellSize = 40)
+plot(BCI50ha_grid)
 
-writeOGR(sp.bci.50ha.extent.split, dsn = '.', layer = '50ha_20by20m_grid', driver = "ESRI Shapefile")
+test<-sf_bci50ha%>%st_make_grid(cellsize=c(20,50))%>%as(.,"Spatial")
+writeOGR(BCI50ha_grid%>%as(.,"Spatial"), dsn = '.', layer = '50ha_20by20m_grid', driver = "ESRI Shapefile")
 #output: 50ha_20by20m_grid.shp
-sp.bci.50ha.grid%>%st_as_sf()%>%plot()
-
 
 ## Must check: all the crown location points belong to a subsetted
 ## polygon
-
-
-
-
-
+par(mfrow=c(2,2)) 
+plot(Bci50ha_orig_grid)
+sp_BCI50ha_grid%>%st_as_sf()%>%plot()
+cowplot::plot_grid(p1,p2)
+df%>%filter(.data[["L1"]]==one) #rlang 0.4.0 should work
+ 
 
 ### merge dataset
 
