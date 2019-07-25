@@ -2,6 +2,8 @@ library(tidyverse)
 library(RCzechia)
 library(sf)
 
+#test
+
 #https://www.r-spatial.org/r/2018/10/25/ggplot2-sf.html
 mesto <- kraje() %>% # All Czech NUTS3 ...
   filter(KOD_KRAJ == '3018') %>% # ... city of Prague
